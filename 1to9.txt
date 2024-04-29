@@ -1,0 +1,313 @@
+p-1
+-----------------------------------------------------------------------------------------------------------------------------------------------
+go to ec2 sg ssh http custom port no 7089 create sg
+create instance t2small launch
+connect and install docker dont put last command 
+-----------------------------------------------------------------------------------------------------------------------------------------------
+docker
+docker images
+docker ps -a
+docker run hello-world
+docker run -d redis
+docker run --name mynginx -p 7089:80 -d nginx
+copy public id:7089
+docker images
+docker ps -a
+docker pause id of nginx
+--------------------------------------------------------------------------------------------------------------------------------------------
+p-2
+--------------------------------------------------------------------------------------------------------------------------------------------
+create instance active docker 
+------------------------------------
+sudo nano Dockerfile
+FROM ubuntu
+MAINTAINER myweb@gmail.com
+RUN apt-get update -y
+RUN apt-get install nginx -y
+CMD ["echo","Image Created"]
+--------------------------------
+cat Dockerfile
+clear
+---------------
+docker build -t myimage:latest .
+------------------------------
+docker images
+clear
+docker login
+username
+pass
+-----------------------
+go to docker hub create repository sai1822
+-----------------------------------------
+docker tag img id vaishnavi1822/sai1822
+-------------------------------------
+docker push vaishnavi1822/sai1822
+-----------------------------------
+go to hub cheak img created on tag
+----------------------------------
+docker images
+clear
+docker images
+docker image rm --force img id
+docker images
+docker pull vaishnavi1822/sai1822
+
+clear
+
+docker images
+
+docker run img id
+
+image created is output
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+p-3
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+launch instance
+EC2Docker1
+ubuntu 20.04
+key
+network setting edit
+add sg role
+port range 8080
+sorce type-anywhere
+add sg role
+port range 50000
+sorce type anywhere
+launch instance 
+active docker
+-----------------------------------------------------------------------------------------------------------------------------------------
+docker images
+docker pull jenkins/jenkins:latest
+docker images
+docker inspect img id
+docker run -p 8080:8080 -p 50000:50000 --name jenkins jenkins/jenkins:latest
+
+copy public ip 8080
+               50000
+------------------------------------------------------------------------------------------------------------------------------
+p-5
+-----------------------------------------------------------------------------------------------------
+ECS
+--------
+create cluster
+name 
+ec2 amazon select
+linux2
+t2micro
+1min max3
+ssh key.pem
+create 
+
+task defin
+name 
+amazon ec2 instance
+0.25 0.5
+task role select
+httpd httpd:2.4
+0.25 0.5
+create
+
+ecs deploy 
+launch type
+ec2
+http service name
+create
+
+go to download key  cmd cluster click infrastructure inst id connect ssh client copy on cmd yes docker ps
+-----------------------------------------------------------------------------
+fargate name create
+
+task def
+name 0.25 0.5
+role select
+httpd httpd:2.4
+80-tcp httpd--80-tcp http
+025 0.3
+create
+-----------------------------
+same fargate deploy fargate hi rehne do cluster fargate task click public copy 
+
+---------------------------------------------------------------------------------------
+p-6
+-----------------------------------------------------------------
+launch instance
+active docker
+----------------------------------------------------------------------
+curl -SL https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+-----------------------------------------------------------------------------------------------------------------------------------
+chmod +x /usr/local/bin/docker-compose 
+-----------------------------------------------
+compose version
+mkdir composetest 
+cd composetest
+------------------------------------------
+sudo nano app.py
+import time
+import redis
+from flask import Flask
+app = Flask(__name__)
+cache = redis.Redis(host='redis', port=6379)
+def get_hit_count():
+    retries = 5
+    while True:
+        try:
+            return cache.incr('hits')
+        except redis.exceptions.ConnectionError as exc:
+            if retries == 0:
+                raise exc
+            retries -= 1
+            time.sleep(0.5)
+@app.route('/')
+def hello():
+    count = get_hit_count()
+    return 'Hello World! I have been seen {} times.\n'.format(count)
+----------------------------------------------------------------------
+sudo nano requirements.txt
+flask
+redis
+---------------------------
+sudo nano Dockerfile
+
+#syntax=docker/dockerfile:1
+FROM python:3.10-alpine
+WORKDIR /code
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+RUN apk add --no-cache gcc musl-dev linux-headers
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+EXPOSE 5000
+COPY . .
+CMD ["flask", "run"]
+--------------------------------
+
+sudo nano compose.yml
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:5000"
+  redis:
+    image: "redis:alpine"
+-------------------------------------
+ls
+docker compose up
+http://PublicIP:8000/ 
+-------------------------------------
+p-8
+------------------------------------------
+sg
+ssh http all traffic ipv4
+4instace
+active docker in all
+----------------------------
+manager- docker swarm init
+command copy in all worker node
+------------------------------------
+manager- mkdir webapp
+         cd webapp
+----------------------------------
+nano app.py
+
+from flask import Flask
+from redis import Redis, RedisError
+import os
+import socket
+
+redis = Redis(host="redis", db=0, socket_connect_timeout=2, socket_timeout=2)
+
+app = Flask(__name__)
+
+@app.route("/")
+def hello():
+	try:
+	 visits = redis.incr("counter")
+	except RedisError:
+	 visits = "<i>cannot connect to Redis, counter disabled</i>"
+	
+	html = "<h3>Hello {name}!</h3>" \
+	       "<b>Hostname:</b> {hostname} <br/>" \
+	       "<b>Visits:</b> {visits}"
+	return html.format(name=os.getenv("NAME", "world"), hostname=socket.gethostname(), visits=visits)
+
+if __name__ == "__main__":
+	app.run(host='0.0.0.0', port=80)
+-----------------------------------------------
+nano docker-compose.yml
+
+version: "3"
+services:
+  # Service Name Defined as web
+  web:
+    # Pull the Image from Repository.
+    # replace username/repo:tag with your name and image details
+    #image: username/repo:tag 
+    image: manasvikp01/web_app:1.0
+    # Command used to deploy the Service
+    deploy:
+      # Run 5 instances of that image as a service called web
+      replicas: 5
+      resources:
+        # Limiting each one to use, at most, 10% of a single core of CPU time and 50MB of RAM.
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      # Immediately restart containers if one fails.     
+      restart_policy:
+        condition: on-failure
+    # Map port 4000 on the host to web’s port 80.    
+    ports:
+      - "4000:80"
+    # Define default network  
+    networks:
+      - webnet
+networks:
+  webnet:
+
+--------------------------------------------------------
+nano Dockerfile
+
+FROM python:3.12-slim
+WORKDIR /app
+COPY . /app
+RUN pip install --trusted-host pypi.python.org -r requirements.txt
+EXPOSE 80
+ENV NAME World
+CMD ["python", "app.py"]
+---------------------------------------
+nano requirements.txt
+
+Flask
+Redis
+---------------------------------
+docker build -t web_app .
+------------------------------
+docker tag web_app:latest username/web_app:1.0
+-------------------------------------------------
+docker login
+
+docker push username/web_app:1.0
+-------------------------------------
+docker stack deploy -c docker-compose.yml web_app
+copy public ip 4000
+---------------------------------------------------------
+p-9
+----------------------------------------------
+launch insatnce
+active docker
+mkdir healthcheck
+cd healthcheck
+
+docker container run --name pg1 -e POSTGRES_PASSWORD=mypassword -d postgres
+----------------------------
+docker ps -a
+--------------------
+docker container run --name pg2 -e POSTGRES_PASSWORD=mypassword --health-cmd="pg_isready -u postgres || exit" -d postgres
+------------------------------------------
+docker ps -a
+docker ps -a
+docker ps -a
+docker ps -a
+-------------------
+unhealthy or healthy
